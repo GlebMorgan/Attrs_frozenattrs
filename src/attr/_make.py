@@ -78,6 +78,7 @@ def attrib(
     hash=None,
     init=True,
     metadata=None,
+    frozen=False,
     type=None,
     converter=None,
     factory=None,
@@ -148,6 +149,7 @@ def attrib(
         value is converted before being passed to the validator, if any.
     :param metadata: An arbitrary mapping, to be used by third-party
         components.  See :ref:`extending_metadata`.
+    :param bool frozen: Make the attribute read-only.
     :param type: The type of the attribute.  In Python 3.6 or greater, the
         preferred method to specify the type is using a variable annotation
         (see `PEP 526 <https://www.python.org/dev/peps/pep-0526/>`_).
@@ -164,6 +166,7 @@ def attrib(
 
     .. versionadded:: 15.2.0 *convert*
     .. versionadded:: 16.3.0 *metadata*
+    ..  versionchanged:: 17.1.0 *frozen* attributes are supported now.
     .. versionchanged:: 17.1.0 *validator* can be a ``list`` now.
     .. versionchanged:: 17.1.0
        *hash* is ``None`` and therefore mirrors *cmp* by default.
@@ -203,6 +206,7 @@ def attrib(
         init=init,
         converter=converter,
         metadata=metadata,
+        frozen=frozen,
         type=type,
         kw_only=kw_only,
     )
@@ -341,7 +345,8 @@ def _transform_attrs(cls, these, auto_attribs, kw_only):
         )
 
     own_attrs = [
-        Attribute.from_counting_attr(
+        (Attribute if not ca.frozen
+         else FrozenAttribute).from_counting_attr(
             name=attr_name, ca=ca, type=anns.get(attr_name)
         )
         for attr_name, ca in ca_list
@@ -1431,16 +1436,16 @@ def _attrs_to_init_script(
                 "_setattr = _cached_setattr.__get__(self, self.__class__)"
             )
 
-            def fmt_setter(attr_name, value_var):
+            def fmt_setter(attr_name, value_var, frozenattr):
                 return "_setattr('%(attr_name)s', %(value_var)s)" % {
-                    "attr_name": attr_name,
+                    "attr_name": attr_name + '_slot' if frozenattr else attr_name,
                     "value_var": value_var,
                 }
 
-            def fmt_setter_with_converter(attr_name, value_var):
+            def fmt_setter_with_converter(attr_name, value_var, frozenattr):
                 conv_name = _init_converter_pat.format(attr_name)
                 return "_setattr('%(attr_name)s', %(conv)s(%(value_var)s))" % {
-                    "attr_name": attr_name,
+                    "attr_name": attr_name + '_slot' if frozenattr else attr_name,
                     "value_var": value_var,
                     "conv": conv_name,
                 }
@@ -1458,7 +1463,9 @@ def _attrs_to_init_script(
                     "_setattr = _cached_setattr.__get__(self, self.__class__)"
                 )
 
-            def fmt_setter(attr_name, value_var):
+            def fmt_setter(attr_name, value_var, frozenattr):
+                # TESTME: Do we need to add '_slot' when attr comes
+                #   from an ancestor's __dict__? (here and in the function below)
                 if _is_slot_attr(attr_name, base_attr_map):
                     res = "_setattr('%(attr_name)s', %(value_var)s)" % {
                         "attr_name": attr_name,
@@ -1466,35 +1473,49 @@ def _attrs_to_init_script(
                     }
                 else:
                     res = "_inst_dict['%(attr_name)s'] = %(value_var)s" % {
-                        "attr_name": attr_name,
+                        "attr_name": attr_name + '_slot' if frozenattr else attr_name,
                         "value_var": value_var,
                     }
                 return res
 
-            def fmt_setter_with_converter(attr_name, value_var):
+            def fmt_setter_with_converter(attr_name, value_var, frozenattr):
                 conv_name = _init_converter_pat.format(attr_name)
                 if _is_slot_attr(attr_name, base_attr_map):
-                    tmpl = "_setattr('%(attr_name)s', %(c)s(%(value_var)s))"
+                    res = "_setattr('%(attr_name)s', %(c)s(%(value_var)s))" % {
+                        "attr_name": attr_name + '_slot' if frozenattr else attr_name,
+                        "value_var": value_var,
+                        "c": conv_name,
+                    }
                 else:
-                    tmpl = "_inst_dict['%(attr_name)s'] = %(c)s(%(value_var)s)"
-                return tmpl % {
-                    "attr_name": attr_name,
-                    "value_var": value_var,
-                    "c": conv_name,
-                }
+                    res = "_inst_dict['%(attr_name)s'] = %(c)s(%(value_var)s)" % {
+                        "attr_name": attr_name,
+                        "value_var": value_var,
+                        "c": conv_name,
+                    }
+                return res
 
     else:
         # Not frozen.
-        def fmt_setter(attr_name, value):
-            return "self.%(attr_name)s = %(value)s" % {
-                "attr_name": attr_name,
+        def lhsexpr(name, frozenattr):
+            if slots and frozenattr:
+                return "__%s_slot" % name
+            elif not slots and frozenattr:
+                return "__dict__['%s']" % name
+            else:
+                return name
+
+        def fmt_setter(attr_name, value, frozenattr):
+            assignee = lhsexpr(attr_name, frozenattr)
+            return "self.%(assignee)s = %(value)s" % {
+                "assignee": assignee,
                 "value": value,
             }
 
-        def fmt_setter_with_converter(attr_name, value_var):
+        def fmt_setter_with_converter(attr_name, value_var, frozenattr):
+            assignee = lhsexpr(attr_name, frozenattr)
             conv_name = _init_converter_pat.format(attr_name)
-            return "self.%(attr_name)s = %(conv)s(%(value_var)s)" % {
-                "attr_name": attr_name,
+            return "self.%(assignee)s = %(conv)s(%(value_var)s)" % {
+                "assignee": assignee,
                 "value_var": value_var,
                 "conv": conv_name,
             }
@@ -1526,6 +1547,7 @@ def _attrs_to_init_script(
                         fmt_setter_with_converter(
                             attr_name,
                             init_factory_name + "({0})".format(maybe_self),
+                            a.frozen,
                         )
                     )
                     conv_name = _init_converter_pat.format(a.name)
@@ -1535,6 +1557,7 @@ def _attrs_to_init_script(
                         fmt_setter(
                             attr_name,
                             init_factory_name + "({0})".format(maybe_self),
+                            a.frozen,
                         )
                     )
                 names_for_globals[init_factory_name] = a.default.factory
@@ -1546,6 +1569,7 @@ def _attrs_to_init_script(
                             "attr_dict['{attr_name}'].default".format(
                                 attr_name=attr_name
                             ),
+                            a.frozen,
                         )
                     )
                     conv_name = _init_converter_pat.format(a.name)
@@ -1557,6 +1581,7 @@ def _attrs_to_init_script(
                             "attr_dict['{attr_name}'].default".format(
                                 attr_name=attr_name
                             ),
+                            a.frozen,
                         )
                     )
         elif a.default is not NOTHING and not has_factory:
@@ -1568,12 +1593,12 @@ def _attrs_to_init_script(
             else:
                 args.append(arg)
             if a.converter is not None:
-                lines.append(fmt_setter_with_converter(attr_name, arg_name))
+                lines.append(fmt_setter_with_converter(attr_name, arg_name, a.frozen))
                 names_for_globals[
                     _init_converter_pat.format(a.name)
                 ] = a.converter
             else:
-                lines.append(fmt_setter(attr_name, arg_name))
+                lines.append(fmt_setter(attr_name, arg_name, a.frozen))
         elif has_factory:
             arg = "{arg_name}=NOTHING".format(arg_name=arg_name)
             if a.kw_only:
@@ -1586,27 +1611,29 @@ def _attrs_to_init_script(
             init_factory_name = _init_factory_pat.format(a.name)
             if a.converter is not None:
                 lines.append(
-                    "    " + fmt_setter_with_converter(attr_name, arg_name)
+                    "    " + fmt_setter_with_converter(attr_name, arg_name, a.frozen)
                 )
                 lines.append("else:")
                 lines.append(
-                    "    "
-                    + fmt_setter_with_converter(
-                        attr_name,
-                        init_factory_name + "({0})".format(maybe_self),
-                    )
+                        "    "
+                        + fmt_setter_with_converter(
+                                attr_name,
+                                init_factory_name + "({0})".format(maybe_self),
+                                a.frozen,
+                        )
                 )
                 names_for_globals[
                     _init_converter_pat.format(a.name)
                 ] = a.converter
             else:
-                lines.append("    " + fmt_setter(attr_name, arg_name))
+                lines.append("    " + fmt_setter(attr_name, arg_name, a.frozen))
                 lines.append("else:")
                 lines.append(
                     "    "
                     + fmt_setter(
                         attr_name,
                         init_factory_name + "({0})".format(maybe_self),
+                        a.frozen,
                     )
                 )
             names_for_globals[init_factory_name] = a.default.factory
@@ -1616,12 +1643,12 @@ def _attrs_to_init_script(
             else:
                 args.append(arg_name)
             if a.converter is not None:
-                lines.append(fmt_setter_with_converter(attr_name, arg_name))
+                lines.append(fmt_setter_with_converter(attr_name, arg_name, a.frozen))
                 names_for_globals[
                     _init_converter_pat.format(a.name)
                 ] = a.converter
             else:
-                lines.append(fmt_setter(attr_name, arg_name))
+                lines.append(fmt_setter(attr_name, arg_name, a.frozen))
 
         if a.init is True and a.converter is None and a.type is not None:
             annotations[arg_name] = a.type
@@ -1708,6 +1735,7 @@ class Attribute(object):
         "hash",
         "init",
         "metadata",
+        "frozen",
         "type",
         "converter",
         "kw_only",
@@ -1723,6 +1751,7 @@ class Attribute(object):
         hash,
         init,
         metadata=None,
+        frozen=False,
         type=None,
         converter=None,
         kw_only=False,
@@ -1748,6 +1777,7 @@ class Attribute(object):
                 else _empty_metadata_singleton
             ),
         )
+        bound_setattr("frozen", frozen)
         bound_setattr("type", type)
         bound_setattr("kw_only", kw_only)
 
@@ -1861,6 +1891,7 @@ class _CountingAttr(object):
         "metadata",
         "_validator",
         "converter",
+        "frozen",
         "type",
         "kw_only",
     )
@@ -1875,7 +1906,8 @@ class _CountingAttr(object):
             init=True,
             kw_only=False,
         )
-        for name in ("counter", "_default", "repr", "cmp", "hash", "init")
+        for name in ("counter", "_default", "repr", "cmp", "hash", "init", "frozen")
+        # TESTME: What is the purpose of 'frozen' here???                  ^^^^^^^^
     ) + (
         Attribute(
             name="metadata",
@@ -1899,6 +1931,7 @@ class _CountingAttr(object):
         hash,
         init,
         converter,
+        frozen,
         metadata,
         type,
         kw_only,
@@ -1916,6 +1949,7 @@ class _CountingAttr(object):
         self.hash = hash
         self.init = init
         self.converter = converter
+        self.frozen = frozen
         self.metadata = metadata
         self.type = type
         self.kw_only = kw_only
@@ -1953,6 +1987,40 @@ class _CountingAttr(object):
 
 
 _CountingAttr = _add_cmp(_add_repr(_CountingAttr))
+
+
+class FrozenAttributeDescriptor(object):
+    """
+    A descriptor to prevent attribute modification to dict classes.
+    """
+    __slots__ = ()
+
+    def __set__(self, obj, value):
+        raise AttributeError('This attribute is frozen.')
+
+    def __delete__(self, obj):
+        raise AttributeError('This attribute is frozen.')
+
+
+class FrozenAttribute(Attribute, FrozenAttributeDescriptor):
+    """
+    The holy matrimony of an attribute and a read-only descriptor.
+
+    Divorce us once attributes get stripped from classes.
+    """
+
+
+class FrozenSlotDescriptor(FrozenAttributeDescriptor):
+    """
+    Wraps the normal Python slot descriptor, disabling write access.
+    """
+    __slots__ = ('_orig')
+
+    def __init__(self, orig):
+        self._orig = orig
+
+    def __get__(self, obj, type=None):
+        return self._orig.__get__(obj, type)
 
 
 @attrs(slots=True, init=False, hash=True)
@@ -2049,7 +2117,7 @@ class _AndValidator(object):
     _validators = attrib()
 
     def __call__(self, inst, attr, value):
-        for v in self._validators:
+        for v in self._validators:  # TESTME: is it iterable?
             v(inst, attr, value)
 
 
