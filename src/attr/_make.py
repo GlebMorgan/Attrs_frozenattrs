@@ -1750,10 +1750,10 @@ class Attribute(object):
         cmp,
         hash,
         init,
+        converter=None,
         metadata=None,
         frozen=False,
         type=None,
-        converter=None,
         kw_only=False,
     ):
         # Cache this descriptor here to speed things up later.
