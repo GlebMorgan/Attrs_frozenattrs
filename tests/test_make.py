@@ -216,8 +216,8 @@ class TestTransformAttrs(object):
             "No mandatory attributes allowed after an attribute with a "
             "default value or factory.  Attribute in question: Attribute"
             "(name='y', default=NOTHING, validator=None, repr=True, "
-            "cmp=True, hash=None, init=True, converter=None, "
-            "metadata=mappingproxy({}), frozen=False, type=None, kw_only=False)",
+            "cmp=True, hash=None, init=True, convert=None, "
+            "metadata=mappingproxy({}), frozen=False)",
         ) == e.value.args
 
     def test_kw_only(self):
@@ -638,8 +638,8 @@ class TestKeywordOnlyAttributes(object):
             "keyword-only attribute (unless they are init=False).  "
             "Attribute in question: Attribute"
             "(name='y', default=NOTHING, validator=None, repr=True, "
-            "cmp=True, hash=None, init=True, converter=None, "
-            "metadata=mappingproxy({}), frozen=False, type=None, kw_only=False)",
+            "cmp=True, hash=None, init=True, metadata=mappingproxy({}), "
+            "type=None, converter=None, kw_only=False)",
         ) == e.value.args
 
     def test_keyword_only_attributes_allow_subclassing(self):
