@@ -19,6 +19,12 @@ def die(msg, errcode=1):
     exit(errcode)
 
 
+def cmd(command, **kwargs):
+    kw = dict(args=command, capture_output=False, encoding='oem')
+    kw.update(kwargs)
+    return run(**kw)
+
+
 def ask(msg, options=None):
     if not options:
         options = ['y', 'n']
@@ -49,24 +55,26 @@ def get_version():
         return version
 
 
-def cmd(command):
-    return run(args=command, capture_output=False, encoding='oem')
+def is_same_version(package_v):
+    result = cmd(f"pip show {PACKAGE}", capture_output=True)
+    handle_errors(result)
+    installed_v = re.search(r'Version: (.+)', result.stdout).group(1)
+    return package_v == installed_v
 
 
 def install(version):
+    uninstall_command = rf"pip uninstall {PACKAGE}=={version}"
+    install_command = rf"pip install --no-index --find-links ./dist {PACKAGE}=={version}"
+    update_command = rf"pip install --upgrade --no-index --find-links ./dist {PACKAGE}=={version}"
 
-    uninstall_command = dict(
-            command=rf"pip uninstall {PACKAGE}",
-            msg='Uninstalling old package ...',
-    )
-    install_command = dict(
-            command=rf"pip install --upgrade --no-index --find-links ./dist {PACKAGE}=={version}",
-            msg='Installing new package ...',
-    )
-
-    for action in (install_command, ):
-        print(action['msg'])
-        handle_errors(cmd(action['command']))
+    if is_same_version(version):
+        print("Uninstalling old package ...")
+        handle_errors(cmd(uninstall_command))
+        print("Installing new package ...")
+        handle_errors(cmd(install_command))
+    else:
+        print("Updating old package ...")
+        handle_errors(cmd(update_command))
 
 
 def check_wheel_overwrite(version):
@@ -90,7 +98,7 @@ if __name__ == '__main__':
         print(f"Package: {PACKAGE}")
         print('-'*120)
         print()
-        startup_msg = "Enter - build & install, B - build, I - install"
+        startup_msg = "Enter - build & install, B - build, I - install/reinstall"
         reply = ask(startup_msg, ('', 'B', 'I')).upper()
         ver = get_version()
         if reply == '' or reply == 'B':
