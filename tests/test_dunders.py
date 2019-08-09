@@ -657,7 +657,7 @@ class TestAddInit(object):
                 simple_attr(name="b", default=Factory(D)),
             ]
 
-        C = _add_init(C, False, False)
+        C = _add_init(C, False)
         i = C()
 
         assert [] == i.a

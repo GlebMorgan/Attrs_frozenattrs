@@ -1734,10 +1734,10 @@ class Attribute(object):
         "cmp",
         "hash",
         "init",
+        "converter",
         "metadata",
         "frozen",
         "type",
-        "converter",
         "kw_only",
     )
 
