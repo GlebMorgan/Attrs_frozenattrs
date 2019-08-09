@@ -40,11 +40,14 @@ def ask(msg, options=None):
 def handle_errors(result):
     if result.returncode > 0:
         print()
-        print("ERROR!")
+        if(result.stdout): print(result.stdout)
+        print(f"'{result.args}' - ERROR!")
         if ask("Continue?") != 'y': die("Cancelled")
+        return False
     else:
         print()
         print("OK")
+        return True
 
 
 def get_version():
@@ -57,9 +60,10 @@ def get_version():
 
 def is_same_version(package_v):
     result = cmd(f"pip show {PACKAGE}", capture_output=True)
-    handle_errors(result)
-    installed_v = re.search(r'Version: (.+)', result.stdout).group(1)
-    return package_v == installed_v
+    if  handle_errors(result):
+        installed_v = re.search(r'Version: (.+)', result.stdout).group(1)
+        return package_v == installed_v
+    else: return False
 
 
 def install(version):
