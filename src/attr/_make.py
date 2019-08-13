@@ -381,6 +381,9 @@ def _transform_attrs(cls, these, auto_attribs, kw_only):
     had_default = False
     was_kw_only = False
     for a in attrs:
+        # CONSIDER: Was trying to add Descriptors back...
+        # if these is None and a not in base_attrs:
+        #     setattr(cls, a.name, a)
         if (
             was_kw_only is False
             and had_default is True
@@ -507,6 +510,7 @@ class _ClassBuilder(object):
         base_names = self._base_names
 
         # Clean class of attribute definitions (`attr.ib()`s).
+        # CONSIDER: seems like this deletes Descriptors as well...
         if self._delete_attribs:
             for name in self._attr_names:
                 if (

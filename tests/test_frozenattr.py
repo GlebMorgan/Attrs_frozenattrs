@@ -1,3 +1,4 @@
+from typing import ClassVar
 
 import pytest
 import attr
@@ -7,16 +8,15 @@ import attr
 class TestFrozenAttr:
 
     @attr.s
-    class ConvFrozenattr:
+    class A:
         print("aaa")
-
-        a: int = attr.ib(default=0, frozen=True)
+        a: int = attr.ib(default=0)
+        b: int = attr.ib(default=3, frozen=True)
+        c: ClassVar = 10
 
     def test_is_frozen(self):
         print('azaza')
-        conv = self.ConvFrozenattr(3)
+        conv = self.A(3)
         conv.a = 4
         assert conv.a == 3
 
-
-# TODO: make fork again and manually edit last version of attrs to add frozenattrs based on 3 Tinche's commits
