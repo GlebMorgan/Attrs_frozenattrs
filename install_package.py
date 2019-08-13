@@ -1,8 +1,8 @@
 import re
-from os import walk, listdir, linesep
+from os import listdir, linesep
 from subprocess import run
-from os.path import join as joinpath, isfile
 
+from Utils import die, ask
 
 PACKAGE = 'attrs'
 PATH = 'src/attr'
@@ -12,29 +12,10 @@ version_id_pattern = r'([1-9][0-9]*!)?(0|[1-9][0-9]*)(\.(0|[1-9][0-9]*))*((a|b|r
                      r'(\.post(0|[1-9][0-9]*))?(\.dev(0|[1-9][0-9]*))?'
 
 
-def die(msg, errcode=1):
-    if isinstance(msg, int): errcode, msg = msg, ''
-    print(msg)
-    input('Press any key to exit ...')
-    exit(errcode)
-
-
 def cmd(command, **kwargs):
     kw = dict(args=command, capture_output=False, encoding='oem')
     kw.update(kwargs)
     return run(**kw)
-
-
-def ask(msg, options=None):
-    if not options:
-        options = ['y', 'n']
-    options = list(options)
-    choices = f"{msg} [{', '.join((name if name else '<Enter>' for name in options))}]: "
-    for i, string in enumerate(options): options[i] = string.lower()
-    for _ in range(10):
-        ans = input(choices)
-        if ans.strip().lower() in options: return ans
-    else: die("Run out of attempts")
 
 
 def handle_errors(result):
@@ -67,7 +48,7 @@ def is_same_version(package_v):
 
 
 def install(version):
-    uninstall_command = rf"pip uninstall {PACKAGE}=={version}"
+    uninstall_command = rf"pip uninstall {PACKAGE}"
     install_command = rf"pip install --no-index --find-links ./dist {PACKAGE}=={version}"
     update_command = rf"pip install --upgrade --no-index --find-links ./dist {PACKAGE}=={version}"
 
