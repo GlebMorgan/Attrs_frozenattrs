@@ -217,7 +217,7 @@ class TestTransformAttrs(object):
             "default value or factory.  Attribute in question: Attribute"
             "(name='y', default=NOTHING, validator=None, repr=True, "
             "cmp=True, hash=None, init=True, metadata=mappingproxy({}), "
-            "type=None, converter=None, kw_only=False)",
+            "frozen=False, type=None, converter=None, kw_only=False)",
         ) == e.value.args
 
     def test_kw_only(self):
@@ -639,7 +639,7 @@ class TestKeywordOnlyAttributes(object):
             "Attribute in question: Attribute"
             "(name='y', default=NOTHING, validator=None, repr=True, "
             "cmp=True, hash=None, init=True, metadata=mappingproxy({}), "
-            "type=None, converter=None, kw_only=False)",
+            "frozen=False, type=None, converter=None, kw_only=False)",
         ) == e.value.args
 
     def test_keyword_only_attributes_allow_subclassing(self):

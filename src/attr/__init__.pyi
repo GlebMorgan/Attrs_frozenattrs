@@ -142,6 +142,7 @@ def attrib(
     hash: Optional[bool] = ...,
     init: bool = ...,
     metadata: Optional[Mapping[Any, Any]] = ...,
+    frozen: bool = ...,
     type: object = ...,
     converter: Optional[_ConverterType[_T]] = ...,
     factory: Optional[Callable[[], _T]] = ...,

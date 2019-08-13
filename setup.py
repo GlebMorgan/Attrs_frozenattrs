@@ -56,6 +56,7 @@ EXTRAS_REQUIRE["azure-pipelines"] = EXTRAS_REQUIRE["tests"] + [
 ###############################################################################
 
 HERE = os.path.abspath(os.path.dirname(__file__))
+br = os.linesep
 
 
 def read(*parts):
@@ -86,16 +87,16 @@ VERSION = find_meta("version")
 URL = find_meta("url")
 LONG = (
     read("README.rst")
-    + "\n\n"
-    + "Release Information\n"
-    + "===================\n\n"
+    + br*2
+    + "Release Information" + br
+    + "===================" + br*2
     + re.search(
-        r"(\d+.\d.\d \(.*?\)\n.*?)\n\n\n----\n\n\n",
+        fr"(\d+.\d.\d \(.*?\){br}.*?){br*3}----{br*3}",
         read("CHANGELOG.rst"),
         re.S,
-    ).group(1)
-    + "\n\n`Full changelog "
-    + "<{url}en/stable/changelog.html>`_.\n\n".format(url=URL)
+    ).group(1) + br*2
+    + "`Full changelog "
+    + f"<{URL}en/stable/changelog.html>`_.{br*2}"
     + read("AUTHORS.rst")
 )
 
